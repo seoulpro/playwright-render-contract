@@ -165,6 +165,39 @@ test.describe("runtime collection starts before page content", () => {
     }
   });
 
+  test("does not replay a rejection into a new observer", async ({ page }) => {
+    await page.route("https://example.test/**", async (route) => {
+      const rejecting = route.request().url().endsWith("/rejecting");
+      await route.fulfill({
+        contentType: "text/html",
+        body: `<!doctype html><html><body><main><h1>Journey</h1></main>
+          ${rejecting ? '<script>Promise.reject(new Error("old rejection"))</script>' : ""}
+        </body></html>`
+      });
+    });
+
+    const first = await observePage(page);
+    try {
+      await page.goto("https://example.test/rejecting");
+      const report = await first.inspect();
+      expect(report.findings.map((finding) => finding.ruleId)).toContain(
+        "runtime.unhandled-rejection"
+      );
+    } finally {
+      await first.dispose();
+    }
+
+    const second = await observePage(page);
+    try {
+      await page.goto("https://example.test/healthy");
+      const report = await second.inspect();
+      expect(report.ok).toBe(true);
+      expect(report.findings).toEqual([]);
+    } finally {
+      await second.dispose();
+    }
+  });
+
   test("captures console.error", async ({ page }) => {
     const report = await inspectFixture(page, "console-error");
     expect(report.findings.map((finding) => finding.ruleId)).toEqual([

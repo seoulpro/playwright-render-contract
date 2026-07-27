@@ -146,6 +146,7 @@ export class RuntimeCollector {
   ): Promise<RuntimeCollector> {
     const collector = new RuntimeCollector(page, maxEvents);
     await collector.#connectCdp();
+    collector.#discardInitializationEvents();
     return collector;
   }
 
@@ -229,6 +230,16 @@ export class RuntimeCollector {
       sequence: this.#sequence
     });
     this.#sequence += 1;
+  }
+
+  #discardInitializationEvents(): void {
+    // Runtime.enable can replay an outstanding exception from the document
+    // that was already loaded when observation began. The observer's public
+    // lifetime starts when create() resolves, so initialization events belong
+    // to the baseline rather than the next page journey.
+    this.#events.length = 0;
+    this.#dropped = 0;
+    this.#sequence = 0;
   }
 
   async #connectCdp(): Promise<void> {

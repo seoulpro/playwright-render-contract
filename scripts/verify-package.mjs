@@ -145,6 +145,48 @@ void typecheck
     join(consumer, "example.spec.ts"),
     await readFile(join(repository, "examples", "page.spec.ts"), "utf8")
   );
+  await writeFile(
+    join(consumer, "runtime-smoke.mjs"),
+    `import assert from "node:assert/strict"
+import { chromium } from "@playwright/test"
+import { observePage } from "playwright-render-contract"
+
+const browser = await chromium.launch({ headless: true })
+const page = await browser.newPage()
+
+try {
+  await page.route("https://example.test/**", async (route) => {
+    const rejecting = route.request().url().endsWith("/rejecting")
+    await route.fulfill({
+      contentType: "text/html",
+      body: \`<!doctype html><main><h1>Packaged API</h1></main>
+        \${rejecting ? '<script>Promise.reject(new Error("old rejection"))</script>' : ""}\`
+    })
+  })
+
+  const first = await observePage(page)
+  await page.goto("https://example.test/rejecting")
+  const failed = await first.inspect()
+  assert.equal(failed.ok, false)
+  assert.equal(
+    failed.findings.some(
+      (finding) => finding.ruleId === "runtime.unhandled-rejection"
+    ),
+    true
+  )
+  await first.dispose()
+
+  const second = await observePage(page)
+  await page.goto("https://example.test/healthy")
+  const passed = await second.inspect()
+  assert.equal(passed.ok, true)
+  assert.deepEqual(passed.findings, [])
+  await second.dispose()
+} finally {
+  await browser.close()
+}
+`
+  );
 
   run(npmCommand, ["exec", "--", "tsc", "--noEmit"], consumer);
   run(
@@ -156,6 +198,7 @@ void typecheck
     ],
     consumer
   );
+  run(process.execPath, ["runtime-smoke.mjs"], consumer);
 
   console.log(
     `Verified ${packed.id}: ${packed.entryCount} files, ${packed.size} bytes`
