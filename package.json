@@ -1,0 +1,56 @@
+{
+  "name": "render-contract",
+  "version": "0.1.0",
+  "description": "Assert runtime, readiness, structure, and viewport invariants in Playwright.",
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --sourcemap --clean && tsc -p tsconfig.build.json --emitDeclarationOnly",
+    "check": "tsc --noEmit",
+    "test:unit": "vitest run",
+    "test:browser": "playwright test",
+    "test": "npm run test:unit && npm run test:browser",
+    "test:watch": "vitest",
+    "verify": "npm run check && npm test && npm run build",
+    "prepublishOnly": "npm run verify"
+  },
+  "keywords": [
+    "assertions",
+    "contract-testing",
+    "playwright",
+    "rendering",
+    "testing",
+    "ui"
+  ],
+  "peerDependencies": {
+    "@playwright/test": ">=1.58 <2"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.0",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
