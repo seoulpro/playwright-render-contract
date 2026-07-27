@@ -1,13 +1,6 @@
 import type { NormalizedRenderContract } from "../contract.js";
-import type {
-  RuntimeEvent,
-  RuntimeSnapshot
-} from "../runtime/collector.js";
-import type {
-  FindingSeverity,
-  RenderFinding,
-  Severity
-} from "../types.js";
+import type { RuntimeEvent, RuntimeSnapshot } from "../runtime/collector.js";
+import type { FindingSeverity, RenderFinding, Severity } from "../types.js";
 
 function normalizedMessage(value: string): string {
   return value
@@ -17,19 +10,37 @@ function normalizedMessage(value: string): string {
     .toLowerCase();
 }
 
-function isDuplicatePageError(
-  event: RuntimeEvent,
-  rejections: readonly RuntimeEvent[]
-): boolean {
-  const pageMessage = normalizedMessage(event.message);
-  return rejections.some((rejection) => {
+function duplicatePageErrorSequences(
+  events: readonly RuntimeEvent[]
+): ReadonlySet<number> {
+  const unmatchedPageErrors = events.filter(
+    (event) => event.kind === "page-error"
+  );
+  const duplicates = new Set<number>();
+
+  for (const rejection of events) {
+    if (rejection.kind !== "unhandled-rejection") {
+      continue;
+    }
     const rejectionMessage = normalizedMessage(rejection.message);
-    return (
-      pageMessage === rejectionMessage ||
-      pageMessage.includes(rejectionMessage) ||
-      rejectionMessage.includes(pageMessage)
+    if (!rejectionMessage) {
+      continue;
+    }
+    const matchIndex = unmatchedPageErrors.findIndex(
+      (event) =>
+        Math.abs(event.sequence - rejection.sequence) <= 1 &&
+        normalizedMessage(event.message) === rejectionMessage
     );
-  });
+    if (matchIndex === -1) {
+      continue;
+    }
+    const [duplicate] = unmatchedPageErrors.splice(matchIndex, 1);
+    if (duplicate) {
+      duplicates.add(duplicate.sequence);
+    }
+  }
+
+  return duplicates;
 }
 
 function matchesIgnore(
@@ -41,8 +52,13 @@ function matchesIgnore(
     if (typeof pattern === "string") {
       return searchable.includes(pattern);
     }
-    pattern.lastIndex = 0;
-    return pattern.test(searchable);
+    const previousLastIndex = pattern.lastIndex;
+    try {
+      pattern.lastIndex = 0;
+      return pattern.test(searchable);
+    } finally {
+      pattern.lastIndex = previousLastIndex;
+    }
   });
 }
 
@@ -63,9 +79,7 @@ function findingForEvent(
   };
 }
 
-function enabledSeverity(
-  severity: Severity
-): FindingSeverity | null {
+function enabledSeverity(severity: Severity): FindingSeverity | null {
   return severity === "off" ? null : severity;
 }
 
@@ -74,15 +88,26 @@ export function inspectRuntime(
   contract: NormalizedRenderContract["runtime"]
 ): RenderFinding[] {
   const findings: RenderFinding[] = [];
-  const rejections = snapshot.events.filter(
-    (event) => event.kind === "unhandled-rejection"
-  );
+  if (
+    contract.unhandledRejections !== "off" &&
+    snapshot.unhandledRejectionCollection === "unavailable"
+  ) {
+    findings.push({
+      ruleId: "runtime.unhandled-rejection-audit-unavailable",
+      severity: "error",
+      message:
+        "Unhandled promise rejection auditing is unavailable for this page.",
+      evidence: {
+        configuredSeverity: contract.unhandledRejections
+      }
+    });
+  }
+  const duplicatePageErrors = duplicatePageErrorSequences(snapshot.events);
 
   for (const event of snapshot.events) {
     if (
       matchesIgnore(event, contract.ignore) ||
-      (event.kind === "page-error" &&
-        isDuplicatePageError(event, rejections))
+      (event.kind === "page-error" && duplicatePageErrors.has(event.sequence))
     ) {
       continue;
     }
@@ -109,4 +134,3 @@ export function inspectRuntime(
   }
   return findings;
 }
-

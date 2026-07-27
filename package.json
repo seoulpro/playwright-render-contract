@@ -1,13 +1,26 @@
 {
-  "name": "render-contract",
+  "name": "playwright-render-contract",
   "version": "0.1.0",
   "description": "Assert runtime, readiness, structure, and viewport invariants in Playwright.",
+  "author": "Limsumin",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seoulpro/playwright-render-contract.git"
+  },
+  "bugs": {
+    "url": "https://github.com/seoulpro/playwright-render-contract/issues"
+  },
+  "homepage": "https://github.com/seoulpro/playwright-render-contract#readme",
   "type": "module",
+  "sideEffects": false,
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs/design-notes.md"
   ],
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -24,11 +37,18 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --sourcemap --clean && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "check": "tsc --noEmit",
+    "check:package": "publint && attw --pack --profile esm-only .",
+    "format": "biome format --write --files-ignore-unknown=true .",
+    "format:check": "biome format --files-ignore-unknown=true .",
+    "lint": "biome lint --files-ignore-unknown=true .",
     "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:browser": "playwright test",
+    "test:package": "node scripts/verify-package.mjs",
     "test": "npm run test:unit && npm run test:browser",
     "test:watch": "vitest",
-    "verify": "npm run check && npm test && npm run build",
+    "verify": "npm run format:check && npm run lint && npm run check && npm run test:coverage && npm run test:browser && npm run build && npm run check:package && npm run test:package",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run verify"
   },
   "keywords": [
@@ -46,9 +66,12 @@
     "esbuild": "^0.28.1"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@biomejs/biome": "^2.5.5",
     "@playwright/test": "^1.62.0",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "publint": "^0.3.22",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

@@ -1,10 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import type { NormalizedRenderContract } from "../contract.js";
-import type {
-  FindingSeverity,
-  RenderFinding
-} from "../types.js";
+import type { FindingSeverity, RenderFinding } from "../types.js";
 
 interface OverflowSnapshot {
   clientWidth: number;
@@ -53,4 +50,3 @@ export async function inspectViewport(
     }
   ];
 }
-

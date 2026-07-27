@@ -1,12 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import {
-  expect,
-  test,
-  type Page,
-  type TestInfo
-} from "@playwright/test";
+import { expect, test, type Page, type TestInfo } from "@playwright/test";
 
 import {
   attachRenderReport,
@@ -60,9 +55,7 @@ test.describe("healthy pages", () => {
     { width: 1366, height: 900 },
     { width: 390, height: 844 }
   ]) {
-    test(`passes at ${viewport.width}x${viewport.height}`, async ({
-      page
-    }) => {
+    test(`passes at ${viewport.width}x${viewport.height}`, async ({ page }) => {
       const report = await inspectFixture(
         page,
         "healthy",
@@ -80,10 +73,9 @@ test.describe("healthy pages", () => {
     });
   }
 
-  test("supports the custom matcher and report attachment", async (
-    { page },
-    testInfo: TestInfo
-  ) => {
+  test("supports the custom matcher and report attachment", async ({
+    page
+  }, testInfo: TestInfo) => {
     const observer = await observeFixture(page, "healthy");
     try {
       await expect(observer).toPassRenderContract();
@@ -120,6 +112,23 @@ test("reports a forbidden busy state", async ({ page }) => {
   ]);
 });
 
+test("rejects invalid CSS selectors as configuration errors", async ({
+  page
+}) => {
+  const observer = await observeFixture(page, "healthy");
+  try {
+    await expect(
+      observer.inspect({
+        ready: {
+          all: [{ selector: "[data-ready=" }]
+        }
+      })
+    ).rejects.toThrow("ready.all[0].selector must be valid CSS");
+  } finally {
+    await observer.dispose();
+  }
+});
+
 test.describe("runtime collection starts before page content", () => {
   test("captures a synchronous page error", async ({ page }) => {
     const report = await inspectFixture(page, "runtime-throw");
@@ -135,6 +144,25 @@ test.describe("runtime collection starts before page content", () => {
       "runtime.unhandled-rejection"
     ]);
     expect(report.findings[0]?.message).toContain("promise boom");
+  });
+
+  test("does not replay a rejection on repeated inspection", async ({
+    page
+  }) => {
+    const observer = await observeFixture(page, "rejected-promise");
+    try {
+      const first = await observer.inspect();
+      const second = await observer.inspect();
+
+      expect(first.findings).toEqual(second.findings);
+      expect(
+        second.findings.filter(
+          (finding) => finding.ruleId === "runtime.unhandled-rejection"
+        )
+      ).toHaveLength(1);
+    } finally {
+      await observer.dispose();
+    }
   });
 
   test("captures console.error", async ({ page }) => {
@@ -190,12 +218,10 @@ test.describe("viewport rules", () => {
   test("allows an intentionally scrollable nested carousel", async ({
     page
   }) => {
-    const report = await inspectFixture(
-      page,
-      "nested-carousel",
-      undefined,
-      { width: 320, height: 568 }
-    );
+    const report = await inspectFixture(page, "nested-carousel", undefined, {
+      width: 320,
+      height: 568
+    });
     expect(report.ok).toBe(true);
     expect(report.findings).toEqual([]);
   });
@@ -265,12 +291,62 @@ test("redacts query strings and fragments from report URLs by default", async ({
     });
     expect(report.url).toBe("https://example.test/account");
     expect(
-      (
-        report.findings[0]?.evidence.location as
-          | { url?: string }
-          | undefined
-      )?.url
+      (report.findings[0]?.evidence.location as { url?: string } | undefined)
+        ?.url
     ).toBe("https://example.test/account");
+  } finally {
+    await observer.dispose();
+  }
+});
+
+test("bounds duplicate-ID collection and reports an incomplete audit", async ({
+  page
+}) => {
+  await page.setContent(`<!doctype html><html><body>
+    <main><h1>Bounded IDs</h1>
+      <div id="duplicate"></div>
+      <div id="duplicate"></div>
+      <div id="untracked"></div>
+    </main>
+  </body></html>`);
+  const observer = await observePage(page, {
+    maxTrackedIds: 1,
+    maxDuplicateIdFindings: 1
+  });
+  try {
+    const report = await observer.inspect();
+    expect(report.findings.map((finding) => finding.ruleId)).toContain(
+      "structure.id-audit-limit"
+    );
+    expect(report.ok).toBe(false);
+  } finally {
+    await observer.dispose();
+  }
+});
+
+test("does not expose a misleading selector for a truncated ID", async ({
+  page
+}) => {
+  const longId = "x".repeat(600);
+  await page.setContent(`<!doctype html><html><body>
+    <main><h1>Long ID</h1>
+      <div id="${longId}"></div>
+      <div id="${longId}"></div>
+    </main>
+  </body></html>`);
+  const observer = await observePage(page);
+  try {
+    const report = await observer.inspect();
+    const finding = report.findings.find(
+      (candidate) => candidate.ruleId === "structure.unique-id"
+    );
+
+    expect(finding?.selector).toBeUndefined();
+    expect(finding?.evidence).toMatchObject({
+      count: 2,
+      truncated: true
+    });
+    expect(finding?.message.length).toBeLessThan(600);
   } finally {
     await observer.dispose();
   }

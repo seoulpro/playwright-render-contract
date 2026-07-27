@@ -55,17 +55,93 @@ describe("render contract normalization", () => {
   });
 
   it("rejects invalid limits and selectors", () => {
-    expect(() =>
-      normalizeRenderContract({ ready: { timeoutMs: -1 } })
-    ).toThrow("timeoutMs");
+    expect(() => normalizeRenderContract({ ready: { timeoutMs: -1 } })).toThrow(
+      "timeoutMs"
+    );
+    expect(() => normalizeRenderContract({ ready: { timeoutMs: 0 } })).toThrow(
+      "positive"
+    );
     expect(() =>
       normalizeRenderContract({ ready: { all: [{ selector: " " }] } })
     ).toThrow("must not be empty");
     expect(() =>
       normalizeRenderContract({
+        ready: { all: [{ selector: "x".repeat(2_049) }] }
+      })
+    ).toThrow("must not exceed");
+    expect(() =>
+      normalizeRenderContract({
         structure: { main: { min: 2, max: 1 } }
       })
     ).toThrow("greater than or equal");
+    expect(() =>
+      normalizeRenderContract({
+        structure: { visibleH1: { min: -1 } }
+      })
+    ).toThrow("non-negative integer");
+    expect(() =>
+      normalizeRenderContract({
+        viewport: { tolerancePx: Number.NaN }
+      })
+    ).toThrow("tolerancePx");
+  });
+
+  it("rejects invalid runtime configuration from JavaScript callers", () => {
+    expect(() =>
+      normalizeRenderContract(
+        null as unknown as Parameters<typeof normalizeRenderContract>[0]
+      )
+    ).toThrow("must be an object");
+    expect(() =>
+      normalizeRenderContract({
+        ready: { document: "loaded" }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("ready.document");
+    expect(() =>
+      normalizeRenderContract({
+        runtime: { consoleErrors: "fatal" }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("runtime.consoleErrors");
+    expect(() =>
+      normalizeRenderContract({
+        runtime: { ignore: [42] }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("runtime.ignore");
+    expect(() =>
+      normalizeRenderContract({
+        ready: { all: "main" }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("ready.all must be an array");
+    expect(() =>
+      normalizeRenderContract({
+        ready: { all: [null] }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("selector string");
+    expect(() =>
+      normalizeRenderContract({
+        ready: { all: [{ selector: "main", state: "shown" }] }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("condition state");
+  });
+
+  it("rejects misspelled and inherited contract fields", () => {
+    expect(() =>
+      normalizeRenderContract({
+        runTime: {}
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("unknown render contract field");
+    expect(() =>
+      normalizeRenderContract({
+        ready: { timeOutMs: 10 }
+      } as unknown as Parameters<typeof normalizeRenderContract>[0])
+    ).toThrow("unknown ready field");
+
+    const inherited = Object.create({
+      runtime: { consoleErrors: "off" }
+    }) as Parameters<typeof normalizeRenderContract>[0];
+    expect(normalizeRenderContract(inherited).runtime.consoleErrors).toBe(
+      "error"
+    );
   });
 
   it("keeps literal contract types and object identity", () => {

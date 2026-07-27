@@ -20,4 +20,3 @@ export type {
   SelectorCondition,
   Severity
 } from "./types.js";
-

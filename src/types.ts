@@ -60,13 +60,20 @@ export interface ObserverOptions {
    */
   maxRuntimeEvents?: number;
   /**
+   * Bounds the unique DOM IDs retained while checking duplicates.
+   * Reaching the limit produces an incomplete-audit error finding.
+   */
+  maxTrackedIds?: number;
+  /**
+   * Bounds individual duplicate-ID findings in one report.
+   * Reaching the limit produces an incomplete-audit error finding.
+   */
+  maxDuplicateIdFindings?: number;
+  /**
    * Defaults to `origin-and-path`, which removes query strings and fragments
    * from report URLs. Use `full` only when artifacts may safely retain them.
    */
-  urlPolicy?:
-    | "origin-and-path"
-    | "full"
-    | ((url: string) => string);
+  urlPolicy?: "origin-and-path" | "full" | ((url: string) => string);
 }
 
 export interface RenderObserver {

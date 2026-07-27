@@ -1,13 +1,7 @@
-import type {
-  ExpectMatcherState,
-  MatcherReturnType
-} from "@playwright/test";
+import type { ExpectMatcherState, MatcherReturnType } from "@playwright/test";
 
 import { formatRenderReport } from "../report.js";
-import type {
-  RenderContract,
-  RenderObserver
-} from "../types.js";
+import type { RenderContract, RenderObserver } from "../types.js";
 
 function isRenderObserver(value: unknown): value is RenderObserver {
   return (
@@ -55,4 +49,3 @@ declare global {
     }
   }
 }
-

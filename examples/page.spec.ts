@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   observePage,
   renderContractMatchers
-} from "render-contract";
+} from "playwright-render-contract";
 
 expect.extend(renderContractMatchers);
 
@@ -20,4 +20,3 @@ test("page is ready and stable", async ({ page }) => {
     await observer.dispose();
   }
 });
-

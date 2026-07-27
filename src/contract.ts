@@ -5,6 +5,8 @@ import type {
   Severity
 } from "./types.js";
 
+const MAX_SELECTOR_LENGTH = 2_048;
+
 export interface NormalizedCountContract {
   min: number;
   max: number | null;
@@ -34,46 +36,103 @@ export interface NormalizedRenderContract {
   };
 }
 
+function normalizeObject<T extends object>(
+  value: T | undefined,
+  field: string,
+  allowedKeys: readonly string[]
+): T {
+  if (value === undefined) {
+    return {} as T;
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError(`${field} must be an object`);
+  }
+  const normalized = { ...value };
+  const allowed = new Set(allowedKeys);
+  for (const key of Object.keys(normalized)) {
+    if (!allowed.has(key)) {
+      throw new TypeError(`unknown ${field} field: ${key}`);
+    }
+  }
+  return normalized;
+}
+
 function normalizeSeverity(
   severity: Severity | undefined,
-  fallback: Severity
+  fallback: Severity,
+  field: string
 ): Severity {
-  return severity ?? fallback;
+  const normalized = severity ?? fallback;
+  if (
+    normalized !== "off" &&
+    normalized !== "warning" &&
+    normalized !== "error"
+  ) {
+    throw new TypeError(`${field} must be "off", "warning", or "error"`);
+  }
+  return normalized;
 }
 
 function normalizeCount(
   value: CountContract | undefined,
-  defaults: NormalizedCountContract
+  defaults: NormalizedCountContract,
+  field: string
 ): NormalizedCountContract {
   if (value === undefined) {
     return defaults;
   }
-  const min = value.min ?? 0;
-  const max = value.max ?? null;
+  const normalized = normalizeObject(value, field, ["min", "max"]);
+  const min = normalized.min ?? 0;
+  const max = normalized.max ?? null;
   if (!Number.isInteger(min) || min < 0) {
-    throw new TypeError("structure count min must be a non-negative integer");
+    throw new TypeError(`${field}.min must be a non-negative integer`);
   }
-  if (
-    max !== null &&
-    (!Number.isInteger(max) || max < min)
-  ) {
+  if (max !== null && (!Number.isInteger(max) || max < min)) {
     throw new TypeError(
-      "structure count max must be an integer greater than or equal to min"
+      `${field}.max must be an integer greater than or equal to min`
     );
   }
   return { min, max };
 }
 
 function normalizeConditions(
-  conditions: readonly SelectorCondition[] | undefined
+  conditions: readonly SelectorCondition[] | undefined,
+  field: string
 ): readonly Required<SelectorCondition>[] {
+  if (conditions !== undefined && !Array.isArray(conditions)) {
+    throw new TypeError(`${field} must be an array`);
+  }
   return (conditions ?? []).map((condition) => {
-    if (!condition.selector.trim()) {
+    if (
+      typeof condition !== "object" ||
+      condition === null ||
+      typeof condition.selector !== "string"
+    ) {
+      throw new TypeError(
+        `each ${field} condition must have a selector string`
+      );
+    }
+    const normalized = normalizeObject(condition, `${field} condition`, [
+      "selector",
+      "state"
+    ]);
+    if (!normalized.selector.trim()) {
       throw new TypeError("readiness selectors must not be empty");
     }
+    if (normalized.selector.length > MAX_SELECTOR_LENGTH) {
+      throw new TypeError(
+        `readiness selectors must not exceed ${MAX_SELECTOR_LENGTH} characters`
+      );
+    }
+    const state = normalized.state ?? "visible";
+    if (state !== "attached" && state !== "visible") {
+      throw new TypeError(
+        'readiness condition state must be "attached" or "visible"'
+      );
+    }
     return {
-      selector: condition.selector,
-      state: condition.state ?? "visible"
+      selector: normalized.selector,
+      state
     };
   });
 }
@@ -81,58 +140,108 @@ function normalizeConditions(
 export function normalizeRenderContract(
   contract: RenderContract = {}
 ): NormalizedRenderContract {
-  const timeoutMs = contract.ready?.timeoutMs ?? 5_000;
-  if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
-    throw new TypeError("ready.timeoutMs must be a non-negative number");
+  const normalizedContract = normalizeObject(contract, "render contract", [
+    "ready",
+    "runtime",
+    "structure",
+    "viewport"
+  ]);
+  const ready = normalizeObject(normalizedContract.ready, "ready", [
+    "document",
+    "all",
+    "none",
+    "timeoutMs"
+  ]);
+  const runtime = normalizeObject(normalizedContract.runtime, "runtime", [
+    "pageErrors",
+    "consoleErrors",
+    "unhandledRejections",
+    "ignore"
+  ]);
+  const structure = normalizeObject(normalizedContract.structure, "structure", [
+    "main",
+    "visibleH1",
+    "uniqueIds"
+  ]);
+  const viewport = normalizeObject(normalizedContract.viewport, "viewport", [
+    "horizontalOverflow",
+    "tolerancePx"
+  ]);
+
+  const timeoutMs = ready.timeoutMs ?? 5_000;
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError("ready.timeoutMs must be a positive number");
   }
 
-  const tolerancePx = contract.viewport?.tolerancePx ?? 1;
+  const tolerancePx = viewport.tolerancePx ?? 1;
   if (!Number.isFinite(tolerancePx) || tolerancePx < 0) {
+    throw new TypeError("viewport.tolerancePx must be a non-negative number");
+  }
+
+  const documentState = ready.document ?? "complete";
+  if (documentState !== "interactive" && documentState !== "complete") {
+    throw new TypeError('ready.document must be "interactive" or "complete"');
+  }
+
+  const ignore = runtime.ignore ?? [];
+  if (
+    !Array.isArray(ignore) ||
+    ignore.some(
+      (pattern) => typeof pattern !== "string" && !(pattern instanceof RegExp)
+    )
+  ) {
     throw new TypeError(
-      "viewport.tolerancePx must be a non-negative number"
+      "runtime.ignore must contain only strings and regular expressions"
     );
   }
 
   return {
     ready: {
-      document: contract.ready?.document ?? "complete",
-      all: normalizeConditions(contract.ready?.all),
-      none: normalizeConditions(contract.ready?.none),
+      document: documentState,
+      all: normalizeConditions(ready.all, "ready.all"),
+      none: normalizeConditions(ready.none, "ready.none"),
       timeoutMs
     },
     runtime: {
       pageErrors: normalizeSeverity(
-        contract.runtime?.pageErrors,
-        "error"
+        runtime.pageErrors,
+        "error",
+        "runtime.pageErrors"
       ),
       consoleErrors: normalizeSeverity(
-        contract.runtime?.consoleErrors,
-        "error"
+        runtime.consoleErrors,
+        "error",
+        "runtime.consoleErrors"
       ),
       unhandledRejections: normalizeSeverity(
-        contract.runtime?.unhandledRejections,
-        "error"
+        runtime.unhandledRejections,
+        "error",
+        "runtime.unhandledRejections"
       ),
-      ignore: contract.runtime?.ignore ?? []
+      ignore: [...ignore]
     },
     structure: {
-      main: normalizeCount(contract.structure?.main, {
-        min: 1,
-        max: 1
-      }),
-      visibleH1: normalizeCount(contract.structure?.visibleH1, {
-        min: 1,
-        max: 1
-      }),
+      main: normalizeCount(
+        structure.main,
+        { min: 1, max: 1 },
+        "structure.main"
+      ),
+      visibleH1: normalizeCount(
+        structure.visibleH1,
+        { min: 1, max: 1 },
+        "structure.visibleH1"
+      ),
       uniqueIds: normalizeSeverity(
-        contract.structure?.uniqueIds,
-        "error"
+        structure.uniqueIds,
+        "error",
+        "structure.uniqueIds"
       )
     },
     viewport: {
       horizontalOverflow: normalizeSeverity(
-        contract.viewport?.horizontalOverflow,
-        "error"
+        viewport.horizontalOverflow,
+        "error",
+        "viewport.horizontalOverflow"
       ),
       tolerancePx
     }
@@ -144,4 +253,3 @@ export function defineRenderContract<const T extends RenderContract>(
 ): T {
   return value;
 }
-

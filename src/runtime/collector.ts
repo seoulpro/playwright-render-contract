@@ -1,8 +1,4 @@
-import type {
-  CDPSession,
-  ConsoleMessage,
-  Page
-} from "@playwright/test";
+import type { CDPSession, ConsoleMessage, Page } from "@playwright/test";
 
 export type RuntimeEventKind =
   | "page-error"
@@ -24,6 +20,7 @@ export interface RuntimeEvent {
 export interface RuntimeSnapshot {
   events: readonly RuntimeEvent[];
   dropped: number;
+  unhandledRejectionCollection: "supported" | "unavailable";
 }
 
 interface CdpExceptionDetails {
@@ -36,9 +33,7 @@ interface CdpExceptionDetails {
 }
 
 function truncate(value: string, limit: number): string {
-  return value.length <= limit
-    ? value
-    : `${value.slice(0, limit - 1)}…`;
+  return value.length <= limit ? value : `${value.slice(0, limit - 1)}…`;
 }
 
 function asExceptionDetails(payload: unknown): CdpExceptionDetails | null {
@@ -49,8 +44,7 @@ function asExceptionDetails(payload: unknown): CdpExceptionDetails | null {
   ) {
     return null;
   }
-  const details = (payload as { exceptionDetails?: unknown })
-    .exceptionDetails;
+  const details = (payload as { exceptionDetails?: unknown }).exceptionDetails;
   return typeof details === "object" && details !== null
     ? (details as CdpExceptionDetails)
     : null;
@@ -83,9 +77,7 @@ function rejectionFromCdp(payload: unknown): {
       ? details.exception.value
       : text);
   const firstLine = rawMessage.split("\n")[0] ?? rawMessage;
-  const message = firstLine
-    .replace(/^Uncaught \(in promise\)\s*/u, "")
-    .trim();
+  const message = firstLine.replace(/^Uncaught \(in promise\)\s*/u, "").trim();
   return {
     message: message || "Unhandled promise rejection",
     ...(description.includes("\n") ? { stack: description } : {})
@@ -164,8 +156,29 @@ export class RuntimeCollector {
   snapshot(): RuntimeSnapshot {
     return {
       events: this.#events.map((event) => ({ ...event })),
-      dropped: this.#dropped
+      dropped: this.#dropped,
+      unhandledRejectionCollection: this.#cdp ? "supported" : "unavailable"
     };
+  }
+
+  async flush(): Promise<void> {
+    const cdp = this.#cdp;
+    if (!cdp || this.#disposed) {
+      return;
+    }
+    try {
+      await cdp.send("Runtime.enable");
+    } catch {
+      if (this.#cdp === cdp) {
+        this.#cdp = undefined;
+        cdp.off("Runtime.exceptionThrown", this.#onCdpException);
+        try {
+          await cdp.detach();
+        } catch {
+          // The failed health check may mean the session is already detached.
+        }
+      }
+    }
   }
 
   async dispose(): Promise<void> {
@@ -219,14 +232,28 @@ export class RuntimeCollector {
   }
 
   async #connectCdp(): Promise<void> {
+    let cdp: CDPSession | undefined;
     try {
-      const cdp = await this.#page.context().newCDPSession(this.#page);
-      this.#cdp = cdp;
+      cdp = await this.#page.context().newCDPSession(this.#page);
       cdp.on("Runtime.exceptionThrown", this.#onCdpException);
       await cdp.send("Runtime.enable");
+      this.#cdp = cdp;
     } catch {
       // Page events still provide the portable subset. Chromium adds precise
       // promise-rejection classification through CDP.
+      if (cdp) {
+        cdp.off("Runtime.exceptionThrown", this.#onCdpException);
+        try {
+          await cdp.send("Runtime.disable");
+        } catch {
+          // Runtime may not have been enabled.
+        }
+        try {
+          await cdp.detach();
+        } catch {
+          // The session may already have detached during initialization.
+        }
+      }
       this.#cdp = undefined;
     }
   }

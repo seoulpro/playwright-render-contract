@@ -2,14 +2,13 @@ import type { Page } from "@playwright/test";
 
 import { normalizeRenderContract } from "./contract.js";
 import { sortFindings } from "./report.js";
-import {
-  RuntimeCollector,
-  type RuntimeSnapshot
-} from "./runtime/collector.js";
+import { RuntimeCollector, type RuntimeSnapshot } from "./runtime/collector.js";
 import { inspectReadiness } from "./rules/readiness.js";
 import { inspectRuntime } from "./rules/runtime.js";
 import { inspectStructure } from "./rules/structure.js";
+import type { StructureInspectionLimits } from "./rules/structure.js";
 import { inspectViewport } from "./rules/viewport.js";
+import { applyReportUrlPolicy, defaultReportUrlPolicy } from "./url.js";
 import type {
   ObserverOptions,
   RenderContract,
@@ -20,17 +19,20 @@ import type {
 class PageRenderObserver implements RenderObserver {
   readonly page: Page;
   readonly #runtime: RuntimeCollector;
-  readonly #redactUrl: (url: string) => string;
+  readonly #formatUrl: (url: string) => string;
+  readonly #structureLimits: StructureInspectionLimits;
   #disposed = false;
 
   constructor(
     page: Page,
     runtime: RuntimeCollector,
-    redactUrl: (url: string) => string
+    formatUrl: (url: string) => string,
+    structureLimits: StructureInspectionLimits
   ) {
     this.page = page;
     this.#runtime = runtime;
-    this.#redactUrl = redactUrl;
+    this.#formatUrl = formatUrl;
+    this.#structureLimits = structureLimits;
   }
 
   get disposed(): boolean {
@@ -48,13 +50,14 @@ class PageRenderObserver implements RenderObserver {
       normalized.ready
     );
     const [structureFindings, viewportFindings] = await Promise.all([
-      inspectStructure(this.page, normalized.structure),
+      inspectStructure(this.page, normalized.structure, this.#structureLimits),
       inspectViewport(this.page, normalized.viewport)
     ]);
 
     // This protocol round trip lets already-queued browser events reach the
     // collector without introducing an arbitrary time-based sleep.
     await this.page.evaluate(() => Promise.resolve());
+    await this.#runtime.flush();
     const rawRuntimeSnapshot = this.#runtime.snapshot();
     const runtimeSnapshot: RuntimeSnapshot = {
       ...rawRuntimeSnapshot,
@@ -64,16 +67,13 @@ class PageRenderObserver implements RenderObserver {
           ? {
               location: {
                 ...event.location,
-                url: this.#redactUrl(event.location.url)
+                url: this.#formatUrl(event.location.url)
               }
             }
           : {})
       }))
     };
-    const runtimeFindings = inspectRuntime(
-      runtimeSnapshot,
-      normalized.runtime
-    );
+    const runtimeFindings = inspectRuntime(runtimeSnapshot, normalized.runtime);
     const findings = sortFindings([
       ...readinessFindings,
       ...runtimeFindings,
@@ -87,7 +87,7 @@ class PageRenderObserver implements RenderObserver {
     ]);
     const title =
       rawTitle.length <= 500 ? rawTitle : `${rawTitle.slice(0, 499)}…`;
-    const url = this.#redactUrl(rawUrl);
+    const url = this.#formatUrl(rawUrl);
     const viewport = this.page.viewportSize();
 
     return {
@@ -112,28 +112,59 @@ export async function observePage(
   page: Page,
   options: ObserverOptions = {}
 ): Promise<RenderObserver> {
+  if (
+    typeof options !== "object" ||
+    options === null ||
+    Array.isArray(options)
+  ) {
+    throw new TypeError("observer options must be an object");
+  }
+  for (const key of Object.keys(options)) {
+    if (
+      key !== "maxRuntimeEvents" &&
+      key !== "maxTrackedIds" &&
+      key !== "maxDuplicateIdFindings" &&
+      key !== "urlPolicy"
+    ) {
+      throw new TypeError(`unknown observer option: ${key}`);
+    }
+  }
   const maxRuntimeEvents = options.maxRuntimeEvents ?? 1_000;
   if (!Number.isInteger(maxRuntimeEvents) || maxRuntimeEvents <= 0) {
+    throw new TypeError("maxRuntimeEvents must be a positive integer");
+  }
+  const maxTrackedIds = options.maxTrackedIds ?? 10_000;
+  if (!Number.isInteger(maxTrackedIds) || maxTrackedIds <= 0) {
+    throw new TypeError("maxTrackedIds must be a positive integer");
+  }
+  const maxDuplicateIdFindings = options.maxDuplicateIdFindings ?? 100;
+  if (
+    !Number.isInteger(maxDuplicateIdFindings) ||
+    maxDuplicateIdFindings <= 0
+  ) {
+    throw new TypeError("maxDuplicateIdFindings must be a positive integer");
+  }
+  if (
+    options.urlPolicy !== undefined &&
+    options.urlPolicy !== "origin-and-path" &&
+    options.urlPolicy !== "full" &&
+    typeof options.urlPolicy !== "function"
+  ) {
     throw new TypeError(
-      "maxRuntimeEvents must be a positive integer"
+      'urlPolicy must be "origin-and-path", "full", or a function'
     );
   }
-  const defaultRedactor = (url: string): string => {
-    try {
-      const parsed = new URL(url);
-      parsed.search = "";
-      parsed.hash = "";
-      return parsed.toString();
-    } catch {
-      return url.split(/[?#]/u, 1)[0] ?? "";
-    }
-  };
   const redactUrl =
     typeof options.urlPolicy === "function"
       ? options.urlPolicy
       : options.urlPolicy === "full"
         ? (url: string): string => url
-        : defaultRedactor;
+        : defaultReportUrlPolicy;
+  const formatUrl = (url: string): string =>
+    applyReportUrlPolicy(url, redactUrl);
   const runtime = await RuntimeCollector.create(page, maxRuntimeEvents);
-  return new PageRenderObserver(page, runtime, redactUrl);
+  return new PageRenderObserver(page, runtime, formatUrl, {
+    maxTrackedIds,
+    maxDuplicateIdFindings
+  });
 }

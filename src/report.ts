@@ -8,17 +8,21 @@ const RULE_ORDER = [
   "readiness.forbidden",
   "runtime.page-error",
   "runtime.unhandled-rejection",
+  "runtime.unhandled-rejection-audit-unavailable",
   "runtime.console-error",
   "runtime.dropped-events",
   "structure.main",
   "structure.visible-h1",
   "structure.unique-id",
+  "structure.id-audit-limit",
   "viewport.horizontal-overflow"
 ] as const;
 
 const ruleRank = new Map<string, number>(
   RULE_ORDER.map((rule, index) => [rule, index])
 );
+const compareText = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
 
 export function sortFindings(
   findings: readonly RenderFinding[]
@@ -29,16 +33,26 @@ export function sortFindings(
       (ruleRank.get(right.ruleId) ?? Number.MAX_SAFE_INTEGER);
     return (
       rankDifference ||
-      (left.selector ?? "").localeCompare(right.selector ?? "") ||
-      left.message.localeCompare(right.message)
+      compareText(left.selector ?? "", right.selector ?? "") ||
+      compareText(left.message, right.message)
     );
   });
 }
 
 function markdownCell(value: string, limit = 1_000): string {
   const normalized = value
-    .replaceAll("|", "\\|")
     .replace(/\s+/gu, " ")
+    .replace(/\p{Cc}/gu, "�")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("|", "\\|")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)")
+    .replaceAll("!", "\\!")
     .trim();
   return normalized.length <= limit
     ? normalized
@@ -51,9 +65,7 @@ export function formatRenderReport(report: RenderReport): string {
     "",
     `- Result: ${report.ok ? "pass" : "fail"}`,
     `- URL: ${report.url ? markdownCell(report.url, 2_048) : "(empty)"}`,
-    `- Title: ${
-      report.title ? markdownCell(report.title, 500) : "(empty)"
-    }`,
+    `- Title: ${report.title ? markdownCell(report.title, 500) : "(empty)"}`,
     `- Viewport: ${
       report.viewport
         ? `${report.viewport.width}×${report.viewport.height}`
@@ -68,10 +80,7 @@ export function formatRenderReport(report: RenderReport): string {
     return lines.join("\n");
   }
 
-  lines.push(
-    "| Severity | Rule | Selector | Message |",
-    "|---|---|---|---|"
-  );
+  lines.push("| Severity | Rule | Selector | Message |", "|---|---|---|---|");
   for (const finding of report.findings) {
     lines.push(
       `| ${finding.severity} | ${markdownCell(

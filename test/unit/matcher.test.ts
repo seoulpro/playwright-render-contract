@@ -33,11 +33,10 @@ describe("toPassRenderContract matcher", () => {
       ]
     });
 
-    const result =
-      await renderContractMatchers.toPassRenderContract.call(
-        {} as ExpectMatcherState,
-        observer
-      );
+    const result = await renderContractMatchers.toPassRenderContract.call(
+      {} as ExpectMatcherState,
+      observer
+    );
     expect(result.pass).toBe(true);
   });
 
@@ -58,21 +57,19 @@ describe("toPassRenderContract matcher", () => {
       ]
     });
 
-    const result =
-      await renderContractMatchers.toPassRenderContract.call(
-        {} as ExpectMatcherState,
-        observer
-      );
+    const result = await renderContractMatchers.toPassRenderContract.call(
+      {} as ExpectMatcherState,
+      observer
+    );
     expect(result.pass).toBe(false);
     expect(result.message()).toContain("structure.main");
   });
 
   it("explains invalid matcher input", async () => {
-    const result =
-      await renderContractMatchers.toPassRenderContract.call(
-        {} as ExpectMatcherState,
-        {}
-      );
+    const result = await renderContractMatchers.toPassRenderContract.call(
+      {} as ExpectMatcherState,
+      {}
+    );
     expect(result.pass).toBe(false);
     expect(result.message()).toContain("observePage");
   });
