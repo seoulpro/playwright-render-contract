@@ -37,7 +37,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format esm --sourcemap --clean && tsc -p tsconfig.build.json --emitDeclarationOnly",
     "check": "tsc --noEmit",
-    "check:package": "publint && attw --pack --profile esm-only .",
+    "check:package": "node scripts/check-package.mjs",
     "format": "biome format --write --files-ignore-unknown=true .",
     "format:check": "biome format --files-ignore-unknown=true .",
     "lint": "biome lint --files-ignore-unknown=true .",

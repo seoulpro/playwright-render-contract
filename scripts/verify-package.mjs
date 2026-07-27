@@ -16,6 +16,11 @@ function run(command, arguments_, cwd) {
   return execFileSync(command, arguments_, {
     cwd,
     encoding: "utf8",
+    env: {
+      ...process.env,
+      NPM_CONFIG_DRY_RUN: "false",
+      npm_config_dry_run: "false"
+    },
     stdio: ["ignore", "pipe", "inherit"]
   });
 }
