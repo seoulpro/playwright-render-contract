@@ -1,6 +1,6 @@
 {
   "name": "playwright-render-contract",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Assert runtime, readiness, structure, and viewport invariants in Playwright.",
   "author": "Limsumin",
   "license": "MIT",
