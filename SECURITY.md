@@ -4,10 +4,11 @@ Security fixes are made against the latest published release.
 
 ## Reporting
 
-Use the repository's private vulnerability reporting feature. Include a
-minimal fixture and contract, the package and Playwright versions, browser
-name, impact, and any mitigation. If private reporting is unavailable, open a
-detail-free issue requesting a private contact channel.
+Report privately through the repository's
+[private vulnerability reporting](https://github.com/seoulpro/playwright-render-contract/security/advisories/new)
+feature. Include a minimal fixture and contract, the package and Playwright
+versions, browser name, impact, and any mitigation. Do not open a public issue
+for a suspected vulnerability.
 
 Data exposure through an unredacted report, unbounded collection of
 page-controlled events, listener or protocol-session leakage, and unintended

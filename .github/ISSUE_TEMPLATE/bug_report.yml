@@ -1,0 +1,98 @@
+name: Bug report
+description: Report a reproducible defect in playwright-render-contract
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug.
+
+        Do not report security vulnerabilities here. Use [private vulnerability reporting](https://github.com/seoulpro/playwright-render-contract/security/advisories/new).
+
+        Do not paste secrets, credentials, or unredacted application data. Redact report output, URLs, titles, stacks, and fixtures before posting.
+  - type: input
+    id: package-version
+    attributes:
+      label: playwright-render-contract version
+      description: "Include the installed package version."
+      placeholder: "e.g. 0.1.1"
+    validations:
+      required: true
+  - type: input
+    id: playwright-version
+    attributes:
+      label: Playwright version
+      description: "Include the installed @playwright/test version."
+      placeholder: "e.g. 1.62.0"
+    validations:
+      required: true
+  - type: input
+    id: node-version
+    attributes:
+      label: Node.js version
+      placeholder: "e.g. 22.17.0"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: "e.g. Chromium 151"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected area
+      options:
+        - Readiness
+        - Runtime collection
+        - Structure
+        - Viewport
+        - Reporting or attachments
+        - Observer lifecycle or matcher
+        - Packaging or types
+        - Other or not sure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: "What did you expect the contract or report to do?"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: "What happened instead?"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: "Provide the smallest contract and page or fixture that shows the problem, plus the steps to run it."
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant contract or report output
+      description: "Include findings, rule IDs, or report fields that illustrate the issue. Redact application data first."
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: "This is not a security vulnerability."
+          required: true
+        - label: "I removed secrets, credentials, and unredacted application data from this report."
+          required: true
+        - label: "I agree to follow the [Code of Conduct](https://github.com/seoulpro/playwright-render-contract/blob/main/CODE_OF_CONDUCT.md)."
+          required: true

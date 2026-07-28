@@ -1,0 +1,78 @@
+name: Feature request
+description: Propose a focused enhancement to playwright-render-contract
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Discuss changes to default rules, finding IDs, or report fields before implementation because they affect stored test artifacts and CI expectations.
+
+        Do not include secrets, credentials, or unredacted application data. Report suspected vulnerabilities through [private vulnerability reporting](https://github.com/seoulpro/playwright-render-contract/security/advisories/new).
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: "What are you trying to check or diagnose that is hard today?"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Contract area
+      options:
+        - Readiness
+        - Runtime collection
+        - Structure
+        - Viewport
+        - Reporting or attachments
+        - Observer lifecycle or matcher
+        - Packaging or types
+        - Other or not sure
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: "What should the package do? Describe the check, option, or report behavior."
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: "Describe existing options, workarounds, or focused tools you tried."
+    validations:
+      required: false
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Fit with project boundaries
+      description: "Explain how this fits readiness, runtime, structure, viewport, or reporting contracts rather than browser orchestration, server startup, API mocking, product selectors, accessibility standards, performance scoring, or pixel diffing."
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility impact
+      description: "Note any effect on finding IDs, report fields, deterministic ordering, JSON-safe evidence, or listener and session cleanup."
+    validations:
+      required: false
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Report and privacy impact
+      description: "Would this collect or expose new page-controlled data? Explain how it would remain bounded and reviewable before reports are published."
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: "I removed secrets, credentials, and unredacted application data from this request."
+          required: true
+        - label: "I agree to follow the [Code of Conduct](https://github.com/seoulpro/playwright-render-contract/blob/main/CODE_OF_CONDUCT.md)."
+          required: true
