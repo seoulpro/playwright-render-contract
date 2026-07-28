@@ -1,7 +1,10 @@
 # playwright-render-contract
 
 Assert that a Playwright page is ready, structurally sound, free of runtime
-errors, and contained within its viewport—without a baseline screenshot.
+errors, and contained within its viewport. These checks complement Playwright
+screenshot assertions: a screenshot compares how the page looks against a
+baseline, and a render contract catches readiness, runtime, structure, and
+viewport problems that a picture can miss.
 
 `playwright-render-contract` is a rule layer for an existing Playwright test
 suite. It does not launch browsers, host a site, mock APIs, or replace the
@@ -70,6 +73,68 @@ test("page satisfies its render contract", async ({ page }, testInfo) => {
 The matcher receives the observer, not the page. This lifecycle is deliberate:
 creating an observer after `page.goto()` can miss an early exception,
 rejection, or `console.error`.
+
+## Working with screenshot checks
+
+Screenshot assertions and render contracts answer different questions about the
+same page. A screenshot compares appearance against a baseline; a render
+contract checks whether the page settled, ran without runtime errors, and holds
+its expected structure and width. Run both against the same page and read the
+results together:
+
+| Screenshot | Render contract | Reading |
+| --- | --- | --- |
+| Unchanged | Passes | Appearance matches the baseline and the readiness, runtime, structure, and viewport checks hold. |
+| Unchanged | Fails | A visually silent regression—an early runtime error, a missing landmark, duplicate IDs, or overflow the baseline did not reveal. |
+| Changed | Passes | The difference is visual only; the contract finds no readiness, runtime, structure, or viewport fault. |
+| Changed | Fails | Both kinds of regression are present: appearance moved and a contract check broke. |
+
+### Example: staged loading
+
+Some pages reach their final appearance in stages. An interactive map, for
+instance, may first paint low-detail tiles and then swap in detailed ones; a
+screenshot taken too early captures the coarse frame. This models that class of
+problem and does not imply integration with any particular mapping service.
+
+Let the contract gate the screenshot on a settled state. The recommended order
+is:
+
+1. create the observer before navigation, so startup failures are captured;
+2. navigate, then wait for the meaningful settled marker and the absence of any
+   busy or low-quality state;
+3. take the screenshot once the contract passes.
+
+```ts
+const observer = await observePage(page);
+try {
+  await page.goto("http://localhost:3000/map");
+  await expect(observer).toPassRenderContract({
+    ready: {
+      all: [
+        {
+          selector: 'main[data-render-state="settled"][data-map-ready="true"]',
+          state: "visible"
+        }
+      ],
+      none: [
+        { selector: 'main[aria-busy="true"]', state: "visible" },
+        { selector: '[data-tile-quality="low"]', state: "visible" }
+      ],
+      timeoutMs: 15_000
+    }
+  });
+  await expect(page).toHaveScreenshot("map-settled.png");
+} finally {
+  await observer.dispose();
+}
+```
+
+The application owns what the settled marker means and when it is set. If the
+marker is raised before the detailed tiles are in place, the contract passes
+early and the screenshot is still premature: the library waits for the marker
+but cannot correct one set too soon. The full
+[progressive-rendering example](https://github.com/seoulpro/playwright-render-contract/blob/main/examples/progressive-rendering.spec.ts)
+shows this end to end.
 
 ## Default contract
 
@@ -231,6 +296,10 @@ v0.1 does not perform pixel comparison, clipping/overlap analysis, spatial
 alignment checks, CSS root-cause analysis, WCAG auditing, Lighthouse scoring,
 web-server orchestration, API mocking, cross-origin iframe inspection, or
 worker inspection.
+
+Visual differences—colors, spacing, alignment, clipping or overlap, icons, and
+similar details—remain the domain of screenshot testing; a render contract does
+not inspect pixels.
 
 ## Development
 
