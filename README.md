@@ -321,6 +321,15 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) before adding a rule or changing report
 fields. Report vulnerabilities privately as described in
 [SECURITY.md](./SECURITY.md).
 
+## Related projects
+
+- [render-handoff-contract](https://github.com/seoulpro/render-handoff-contract) —
+  engine-neutral policies for visual continuity, audited rather than screenshotted.
+- [stable-marker-layout](https://github.com/seoulpro/stable-marker-layout) — deterministic
+  label placement, a precondition for stable visual comparison.
+- [vite-deploy-continuity](https://github.com/seoulpro/vite-deploy-continuity) —
+  deployment-side continuity for the app under test.
+
 ## License
 
 [MIT](./LICENSE)
