@@ -2,7 +2,7 @@
   "name": "playwright-render-contract",
   "version": "0.1.1",
   "description": "Assert runtime, readiness, structure, and viewport invariants in Playwright.",
-  "author": "Limsumin",
+  "author": "Sumin Lim <lim@limsumin.com> (https://limsumin.com)",
   "license": "MIT",
   "repository": {
     "type": "git",
